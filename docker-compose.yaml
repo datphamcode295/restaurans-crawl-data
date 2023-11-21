@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  food-sharing-db:
+    image: postgres:latest
+    container_name: food-sharing-db
+    environment:
+      POSTGRES_DB: food-sharing-db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5436:5432"
