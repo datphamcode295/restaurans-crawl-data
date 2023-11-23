@@ -3,7 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/google/uuid"
 	"log"
+	"math"
 	"net/http"
 	"sync"
 
@@ -14,8 +16,11 @@ import (
 
 const (
 	threadMax   = 10
-	totalPages  = 200
-	apiEndpoint = "https://mocha.lozi.vn/v6.1/search/eateries/near-by?cityId=50&limit=50&superCategoryId=1&lat=10.7765194&lng=106.700987&page="
+	apiEndpoint = "https://mocha.lozi.vn/v6.1/search/eateries/near-by?cityId=50&limit=24&superCategoryId=1&lat=10.7765194&lng=106.700987&page="
+)
+
+var (
+	totalPages = 1
 )
 
 // Address struct to represent the address field
@@ -106,17 +111,14 @@ type ApiResponse struct {
 	} `json:"pagination"`
 }
 
-func fetchData(page int, wg *sync.WaitGroup) {
-	defer wg.Done()
-
-	// Construct the API URL for the given page
+func fetchData(page int) (ApiResponse, error) {
 	apiURL := apiEndpoint + fmt.Sprint(page)
 
 	// Make the HTTP GET request
 	response, err := http.Get(apiURL)
 	if err != nil {
 		fmt.Printf("Error making the request for page %d: %v\n", page, err)
-		return
+		return ApiResponse{}, err
 	}
 	defer response.Body.Close()
 
@@ -125,17 +127,23 @@ func fetchData(page int, wg *sync.WaitGroup) {
 	err = json.NewDecoder(response.Body).Decode(&apiResponse)
 	if err != nil {
 		fmt.Printf("Error decoding JSON for page %d: %v\n", page, err)
+		return ApiResponse{}, err
+	}
+	return apiResponse, nil
+}
+func saveData(page int, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	apiResponse, err := fetchData(page)
+	if err != nil {
+		fmt.Printf("Error fetching data for page %d: %v\n", page, err)
 		return
 	}
 
-	// Process the results (you can customize this part based on your needs)
-	fmt.Printf("Data for page %d:\n", page)
 	for _, data := range apiResponse.Data {
-		fmt.Printf("  ID: %d\n", data.ID)
-		err = saveToDB(data)
+		err = saveByExternalId(data)
 		if err != nil {
 			fmt.Printf("Error saving to DB for page %d: %v\n", page, err)
-			return
 		}
 	}
 
@@ -166,6 +174,15 @@ func main() {
 		log.Fatal("Failed to connect to the database:", err)
 	}
 
+	// Calculate the total number of pages
+	apiResponse, err := fetchData(1)
+	if err != nil {
+		fmt.Printf("Error fetching data for page %d: %v\n", 1, err)
+		return
+	}
+	totalPages = int(math.Ceil(float64(apiResponse.Pagination.Total / apiResponse.Pagination.Limit)))
+
+	// get all page data concurrently
 	var wg sync.WaitGroup
 
 	for page := 1; page <= totalPages; page++ {
@@ -175,44 +192,45 @@ func main() {
 		}
 
 		wg.Add(1)
-		go fetchData(page, &wg)
+		go saveData(page, &wg)
 	}
 
 	// Wait for all goroutines to finish
 	wg.Wait()
 }
 
-func saveToDB(data ApiResponseData) error {
-	restaurant := model.Restaurant{
-		Name:                   data.Name,
-		Avatar:                 data.Avatar,
-		Phone:                  data.Phone,
-		CountryCode:            data.CountryCode,
-		Slug:                   data.Slug,
-		Street:                 data.Address.Street,
-		District:               data.Address.District,
-		City:                   data.Address.City,
-		FullAddress:            data.Address.Full,
-		Rating:                 data.Rating,
-		Username:               data.Username,
-		Lat:                    data.Lat,
-		Long:                   data.Long,
-		IsOpening:              data.OperatingStatus.IsOpening,
-		IsOpening24h:           data.OperatingStatus.IsOpening24h,
-		MinutesUntilNextStatus: data.OperatingStatus.MinutesUntilNextStatus,
-		IsLoshipPartner:        data.IsLoshipPartner,
-		IsHonored:              data.IsHonored,
-		Quote:                  data.Quote,
-		IsActive:               data.IsActive,
-		IsCheckedIn:            data.IsCheckedIn,
-		Closed:                 data.Closed,
-		RecommendedRatio:       data.RecommendedRatio,
-		RecommendedEnable:      data.RecommendedEnable,
-		Distance:               data.Distance,
-		IsPurchasedSupplyItems: data.IsPurchasedSupplyItems,
-		IsSponsored:            data.IsSponsored,
-		FreeShippingMilestone:  data.FreeShippingMilestone,
+func saveByExternalId(data ApiResponseData) error {
+	var restaurant model.Restaurant
+	dbError := db.Where("external_id = ?", fmt.Sprint(data.ID)).First(&restaurant).Error
+	if restaurant.ID != uuid.Nil || dbError == nil {
+		restaurant.Name = data.Name
+		restaurant.Avatar = data.Avatar
+		restaurant.Phone = data.Phone
+		restaurant.Slug = data.Slug
+		restaurant.Street = data.Address.Street
+		restaurant.District = data.Address.District
+		restaurant.City = data.Address.City
+		restaurant.FullAddress = data.Address.Full
+		restaurant.Lat = data.Lat
+		restaurant.Long = data.Long
+		restaurant.IsOpening24h = data.OperatingStatus.IsOpening24h
+		restaurant.ExternalId = fmt.Sprint(data.ID)
+		return db.Save(&restaurant).Error
 	}
+	restaurant = model.Restaurant{
+		Name:         data.Name,
+		Avatar:       data.Avatar,
+		Phone:        data.Phone,
+		Slug:         data.Slug,
+		Street:       data.Address.Street,
+		District:     data.Address.District,
+		City:         data.Address.City,
+		FullAddress:  data.Address.Full,
+		Lat:          data.Lat,
+		Long:         data.Long,
+		IsOpening24h: data.OperatingStatus.IsOpening24h,
+		ExternalId:   fmt.Sprint(data.ID),
+	}
+	return db.Save(&restaurant).Error
 
-	return db.Create(&restaurant).Error
 }
