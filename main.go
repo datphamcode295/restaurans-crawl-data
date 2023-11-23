@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"sync"
 
@@ -14,8 +15,11 @@ import (
 
 const (
 	threadMax   = 10
-	totalPages  = 200
-	apiEndpoint = "https://mocha.lozi.vn/v6.1/search/eateries/near-by?cityId=50&limit=50&superCategoryId=1&lat=10.7765194&lng=106.700987&page="
+	apiEndpoint = "https://mocha.lozi.vn/v6.1/search/eateries/near-by?cityId=50&limit=24&superCategoryId=1&lat=10.7765194&lng=106.700987&page="
+)
+
+var (
+	totalPages = 100
 )
 
 // Address struct to represent the address field
@@ -130,12 +134,11 @@ func fetchData(page int, wg *sync.WaitGroup) {
 
 	// Process the results (you can customize this part based on your needs)
 	fmt.Printf("Data for page %d:\n", page)
+	totalPages = int(math.Ceil(float64(apiResponse.Pagination.Total / apiResponse.Pagination.Limit)))
 	for _, data := range apiResponse.Data {
-		fmt.Printf("  ID: %d\n", data.ID)
 		err = saveToDB(data)
 		if err != nil {
 			fmt.Printf("Error saving to DB for page %d: %v\n", page, err)
-			return
 		}
 	}
 
@@ -184,34 +187,19 @@ func main() {
 
 func saveToDB(data ApiResponseData) error {
 	restaurant := model.Restaurant{
-		Name:                   data.Name,
-		Avatar:                 data.Avatar,
-		Phone:                  data.Phone,
-		CountryCode:            data.CountryCode,
-		Slug:                   data.Slug,
-		Street:                 data.Address.Street,
-		District:               data.Address.District,
-		City:                   data.Address.City,
-		FullAddress:            data.Address.Full,
-		Rating:                 data.Rating,
-		Username:               data.Username,
-		Lat:                    data.Lat,
-		Long:                   data.Long,
-		IsOpening:              data.OperatingStatus.IsOpening,
-		IsOpening24h:           data.OperatingStatus.IsOpening24h,
-		MinutesUntilNextStatus: data.OperatingStatus.MinutesUntilNextStatus,
-		IsLoshipPartner:        data.IsLoshipPartner,
-		IsHonored:              data.IsHonored,
-		Quote:                  data.Quote,
-		IsActive:               data.IsActive,
-		IsCheckedIn:            data.IsCheckedIn,
-		Closed:                 data.Closed,
-		RecommendedRatio:       data.RecommendedRatio,
-		RecommendedEnable:      data.RecommendedEnable,
-		Distance:               data.Distance,
-		IsPurchasedSupplyItems: data.IsPurchasedSupplyItems,
-		IsSponsored:            data.IsSponsored,
-		FreeShippingMilestone:  data.FreeShippingMilestone,
+		Name:         data.Name,
+		Avatar:       data.Avatar,
+		Phone:        data.Phone,
+		Slug:         data.Slug,
+		Street:       data.Address.Street,
+		District:     data.Address.District,
+		City:         data.Address.City,
+		FullAddress:  data.Address.Full,
+		Lat:          data.Lat,
+		Long:         data.Long,
+		IsOpening:    data.OperatingStatus.IsOpening,
+		IsOpening24h: data.OperatingStatus.IsOpening24h,
+		Closed:       data.Closed,
 	}
 
 	return db.Create(&restaurant).Error
