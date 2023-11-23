@@ -14,10 +14,7 @@ create table restaurants
     full_address   varchar,
     lat            double precision,
     long           double precision,
-    is_opening     boolean,
     is_opening_24h boolean,
-    closed         boolean,
     avatar         varchar,
-    constraint restaurants_unique_key
-        unique (name, full_address)
+    external_id    varchar unique not null
 );

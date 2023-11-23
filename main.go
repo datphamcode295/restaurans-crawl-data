@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/google/uuid"
 	"log"
 	"math"
 	"net/http"
@@ -136,7 +137,7 @@ func fetchData(page int, wg *sync.WaitGroup) {
 	fmt.Printf("Data for page %d:\n", page)
 	totalPages = int(math.Ceil(float64(apiResponse.Pagination.Total / apiResponse.Pagination.Limit)))
 	for _, data := range apiResponse.Data {
-		err = saveToDB(data)
+		err = saveByExternalId(data)
 		if err != nil {
 			fmt.Printf("Error saving to DB for page %d: %v\n", page, err)
 		}
@@ -185,8 +186,25 @@ func main() {
 	wg.Wait()
 }
 
-func saveToDB(data ApiResponseData) error {
-	restaurant := model.Restaurant{
+func saveByExternalId(data ApiResponseData) error {
+	var restaurant model.Restaurant
+	db.Where("external_id = ?", fmt.Sprint(data.ID)).First(&restaurant)
+	if restaurant.ID != uuid.Nil {
+		restaurant.Name = data.Name
+		restaurant.Avatar = data.Avatar
+		restaurant.Phone = data.Phone
+		restaurant.Slug = data.Slug
+		restaurant.Street = data.Address.Street
+		restaurant.District = data.Address.District
+		restaurant.City = data.Address.City
+		restaurant.FullAddress = data.Address.Full
+		restaurant.Lat = data.Lat
+		restaurant.Long = data.Long
+		restaurant.IsOpening24h = data.OperatingStatus.IsOpening24h
+		restaurant.ExternalId = fmt.Sprint(data.ID)
+		return db.Save(&restaurant).Error
+	}
+	restaurant = model.Restaurant{
 		Name:         data.Name,
 		Avatar:       data.Avatar,
 		Phone:        data.Phone,
@@ -197,10 +215,9 @@ func saveToDB(data ApiResponseData) error {
 		FullAddress:  data.Address.Full,
 		Lat:          data.Lat,
 		Long:         data.Long,
-		IsOpening:    data.OperatingStatus.IsOpening,
 		IsOpening24h: data.OperatingStatus.IsOpening24h,
-		Closed:       data.Closed,
+		ExternalId:   fmt.Sprint(data.ID),
 	}
+	return db.Save(&restaurant).Error
 
-	return db.Create(&restaurant).Error
 }

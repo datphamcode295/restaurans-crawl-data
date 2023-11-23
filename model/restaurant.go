@@ -19,7 +19,6 @@ type Restaurant struct {
 	FullAddress  string
 	Lat          float64
 	Long         float64
-	IsOpening    bool
 	IsOpening24h bool `gorm:"column:is_opening_24h"`
-	Closed       bool
+	ExternalId   string
 }
