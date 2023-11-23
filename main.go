@@ -20,7 +20,7 @@ const (
 )
 
 var (
-	totalPages = 100
+	totalPages = 1
 )
 
 // Address struct to represent the address field
@@ -111,17 +111,14 @@ type ApiResponse struct {
 	} `json:"pagination"`
 }
 
-func fetchData(page int, wg *sync.WaitGroup) {
-	defer wg.Done()
-
-	// Construct the API URL for the given page
+func fetchData(page int) (ApiResponse, error) {
 	apiURL := apiEndpoint + fmt.Sprint(page)
 
 	// Make the HTTP GET request
 	response, err := http.Get(apiURL)
 	if err != nil {
 		fmt.Printf("Error making the request for page %d: %v\n", page, err)
-		return
+		return ApiResponse{}, err
 	}
 	defer response.Body.Close()
 
@@ -130,12 +127,19 @@ func fetchData(page int, wg *sync.WaitGroup) {
 	err = json.NewDecoder(response.Body).Decode(&apiResponse)
 	if err != nil {
 		fmt.Printf("Error decoding JSON for page %d: %v\n", page, err)
+		return ApiResponse{}, err
+	}
+	return apiResponse, nil
+}
+func saveData(page int, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	apiResponse, err := fetchData(page)
+	if err != nil {
+		fmt.Printf("Error fetching data for page %d: %v\n", page, err)
 		return
 	}
 
-	// Process the results (you can customize this part based on your needs)
-	fmt.Printf("Data for page %d:\n", page)
-	totalPages = int(math.Ceil(float64(apiResponse.Pagination.Total / apiResponse.Pagination.Limit)))
 	for _, data := range apiResponse.Data {
 		err = saveByExternalId(data)
 		if err != nil {
@@ -170,6 +174,15 @@ func main() {
 		log.Fatal("Failed to connect to the database:", err)
 	}
 
+	// Calculate the total number of pages
+	apiResponse, err := fetchData(1)
+	if err != nil {
+		fmt.Printf("Error fetching data for page %d: %v\n", 1, err)
+		return
+	}
+	totalPages = int(math.Ceil(float64(apiResponse.Pagination.Total / apiResponse.Pagination.Limit)))
+
+	// get all page data concurrently
 	var wg sync.WaitGroup
 
 	for page := 1; page <= totalPages; page++ {
@@ -179,7 +192,7 @@ func main() {
 		}
 
 		wg.Add(1)
-		go fetchData(page, &wg)
+		go saveData(page, &wg)
 	}
 
 	// Wait for all goroutines to finish
@@ -188,8 +201,8 @@ func main() {
 
 func saveByExternalId(data ApiResponseData) error {
 	var restaurant model.Restaurant
-	db.Where("external_id = ?", fmt.Sprint(data.ID)).First(&restaurant)
-	if restaurant.ID != uuid.Nil {
+	dbError := db.Where("external_id = ?", fmt.Sprint(data.ID)).First(&restaurant).Error
+	if restaurant.ID != uuid.Nil || dbError == nil {
 		restaurant.Name = data.Name
 		restaurant.Avatar = data.Avatar
 		restaurant.Phone = data.Phone
