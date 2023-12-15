@@ -6,7 +6,7 @@ import (
 )
 
 // Create a GORM model for the restaurants table
-type Restaurant struct {
+type Place struct {
 	gorm.Model
 	ID           uuid.UUID `gorm:"type:primary_key;default:uuid_generate_v4()"`
 	Name         string

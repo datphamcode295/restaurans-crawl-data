@@ -1,0 +1,19 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: food-place-crawler
+  namespace: food-app
+spec:
+  schedule: "* */24 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: restaurant-crawl-data
+              image: mickwan1234/food-app-crawler:0.2
+              args:
+                - /bin/sh
+                - -c
+                - ./restaurans-crawl-data
+          restartPolicy: OnFailure

@@ -200,7 +200,7 @@ func main() {
 }
 
 func saveByExternalId(data ApiResponseData) error {
-	var restaurant model.Restaurant
+	var restaurant model.Place
 	dbError := db.Where("external_id = ?", fmt.Sprint(data.ID)).First(&restaurant).Error
 	if restaurant.ID != uuid.Nil || dbError == nil {
 		restaurant.Name = data.Name
@@ -217,7 +217,7 @@ func saveByExternalId(data ApiResponseData) error {
 		restaurant.ExternalId = fmt.Sprint(data.ID)
 		return db.Save(&restaurant).Error
 	}
-	restaurant = model.Restaurant{
+	restaurant = model.Place{
 		Name:         data.Name,
 		Avatar:       data.Avatar,
 		Phone:        data.Phone,
