@@ -215,6 +215,7 @@ func saveByExternalId(data ApiResponseData) error {
 		restaurant.Long = data.Long
 		restaurant.IsOpening24h = data.OperatingStatus.IsOpening24h
 		restaurant.ExternalId = fmt.Sprint(data.ID)
+		restaurant.Username = data.Username
 		return db.Save(&restaurant).Error
 	}
 	restaurant = model.Place{
@@ -230,6 +231,7 @@ func saveByExternalId(data ApiResponseData) error {
 		Long:         data.Long,
 		IsOpening24h: data.OperatingStatus.IsOpening24h,
 		ExternalId:   fmt.Sprint(data.ID),
+		Username:     data.Username,
 	}
 	return db.Save(&restaurant).Error
 
